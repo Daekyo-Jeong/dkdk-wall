@@ -426,25 +426,6 @@ button {
 }
 
 @media (max-width: 680px) {
-  :root {
-    --toolbar-height: 214px;
-  }
-
-  .paint-toolbar {
-    grid-template-columns: 1fr;
-    grid-template-rows: repeat(4, auto);
-    gap: 10px;
-  }
-
-  .color-group {
-    gap: 7px;
-  }
-
-  .size-slider {
-    flex: 1;
-    width: auto;
-  }
-
   .wall-hud {
     right: 12px;
     bottom: 12px;
@@ -459,6 +440,77 @@ button {
   .admin-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Mobile toolbar */
+.paint-toolbar.is-mobile {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  padding: 0;
+  gap: 0;
+}
+
+.toolbar-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 12px;
+  gap: 8px;
+}
+
+.compact-color {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+.toolbar-full {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.toolbar-full.is-visible {
+  display: flex;
+}
+
+.paint-toolbar:not(.is-mobile) .toolbar-full {
+  display: contents;
+}
+
+.paint-toolbar:not(.is-mobile) .toolbar-full.is-visible {
+  display: contents;
+}
+
+@media (max-width: 680px) {
+  :root {
+    --toolbar-height: 56px;
+  }
+
+  .paint-toolbar.is-open {
+    --toolbar-height: 210px;
+  }
+
+  .draw-shell {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .color-group {
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .size-slider {
+    flex: 1;
+    width: auto;
   }
 }
 
