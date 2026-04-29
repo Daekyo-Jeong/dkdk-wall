@@ -10,7 +10,7 @@ loadEnvConfig(process.cwd());
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number.parseInt(process.env.PORT || "3000", 10);
-const hostname = process.env.HOSTNAME || "0.0.0.0";
+const hostname = process.env.HOST || "0.0.0.0";
 
 const WALL_SIZE = { width: 4320, height: 1920 };
 const MAX_STROKES = 20000;
