@@ -443,69 +443,133 @@ button {
   }
 }
 
-/* Mobile toolbar */
-.paint-toolbar.is-mobile {
-  display: flex;
-  flex-direction: column;
-  height: auto;
-  padding: 0;
-  gap: 0;
+/* ── Mobile fullscreen draw ── */
+.draw-shell--mobile {
+  display: block;
+  position: relative;
 }
 
-.toolbar-compact {
+.draw-shell--mobile .wall-stage-draw {
+  height: 100dvh;
+  padding: 0;
+}
+
+.draw-shell--mobile .wall-stage-draw .wall-surface {
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+/* Floating overlay toolbar */
+.mobile-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Expanded panel (hidden by default, slides up) */
+.mobile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  background: rgba(13, 11, 10, 0.92);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--line);
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.32, 0, 0.24, 1),
+    opacity 180ms ease;
+}
+
+.mobile-toolbar.is-open .mobile-panel {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Color row — single line, fills full width */
+.mobile-color-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.mobile-swatch {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 80ms ease;
+}
+
+.mobile-swatch.is-active {
+  border-color: #fff;
+  transform: scaleY(1.08);
+}
+
+.mobile-swatch--picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--muted);
+  overflow: hidden;
+  flex: 0 0 36px;
+}
+
+.mobile-swatch--picker input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Size row */
+.mobile-size-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-size-row .size-slider {
+  flex: 1;
+}
+
+/* Compact bar — always visible */
+.mobile-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 56px;
   padding: 0 12px;
-  gap: 8px;
-}
-
-.compact-color {
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  border: 2px solid rgba(255,255,255,0.2);
-  flex-shrink: 0;
-}
-
-.toolbar-full {
-  display: none;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  background: rgba(13, 11, 10, 0.88);
+  backdrop-filter: blur(16px);
   border-top: 1px solid var(--line);
 }
 
-.toolbar-full.is-visible {
-  display: flex;
-}
-
-.paint-toolbar:not(.is-mobile) .toolbar-full {
-  display: contents;
-}
-
-.paint-toolbar:not(.is-mobile) .toolbar-full.is-visible {
-  display: contents;
+.mobile-color-dot {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  flex-shrink: 0;
 }
 
 @media (max-width: 680px) {
-  :root {
-    --toolbar-height: 56px;
-  }
-
-  .paint-toolbar.is-open {
-    --toolbar-height: 210px;
-  }
-
-  .draw-shell {
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
   .color-group {
     gap: 7px;
-    flex-wrap: wrap;
   }
 
   .size-slider {

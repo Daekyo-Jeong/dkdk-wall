@@ -22,7 +22,7 @@ export function DrawStudio() {
   const [stats, setStats] = useState<WallStats>({ onlineCount: 0, strokeCount: 0 });
   const [userId, setUserId] = useState("loading");
   const [isMobile, setIsMobile] = useState(false);
-  const [toolbarOpen, setToolbarOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     setUserId(getOrCreateUserId());
@@ -33,16 +33,14 @@ export function DrawStudio() {
     setIsMobile(mq.matches);
     const handler = (e: MediaQueryListEvent) => {
       setIsMobile(e.matches);
-      if (!e.matches) setToolbarOpen(false);
+      if (!e.matches) setPanelOpen(false);
     };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const toolbarExpanded = !isMobile || toolbarOpen;
-
   return (
-    <main className="draw-shell">
+    <main className={`draw-shell ${isMobile ? "draw-shell--mobile" : ""}`}>
       <GraffitiWall
         ref={wallRef}
         color={color}
@@ -55,13 +53,66 @@ export function DrawStudio() {
         variant="draw"
       />
 
-      <section
-        className={`paint-toolbar ${isMobile ? "is-mobile" : ""} ${toolbarOpen ? "is-open" : ""}`}
-        aria-label="Drawing tools"
-      >
-        {/* Mobile collapsed bar */}
-        {isMobile && (
-          <div className="toolbar-compact">
+      {isMobile ? (
+        /* ── Mobile: floating overlay toolbar ── */
+        <div className={`mobile-toolbar ${panelOpen ? "is-open" : ""}`}>
+          {/* Expanded panel — slides up above compact bar */}
+          <div className="mobile-panel">
+            {/* Color row — single line, fills width */}
+            <div className="mobile-color-row">
+              {DEFAULT_COLORS.map((swatch) => (
+                <button
+                  key={swatch}
+                  className={`mobile-swatch ${color === swatch ? "is-active" : ""}`}
+                  style={{ backgroundColor: swatch }}
+                  type="button"
+                  onClick={() => { setColor(swatch); setTool("brush"); }}
+                />
+              ))}
+              <label className="mobile-swatch mobile-swatch--picker" title="Custom color">
+                <Circle size={14} />
+                <input
+                  aria-label="Custom color"
+                  type="color"
+                  value={color}
+                  onChange={(e) => { setColor(e.target.value); setTool("brush"); }}
+                />
+              </label>
+            </div>
+
+            {/* Size row */}
+            <div className="mobile-size-row">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setSize((v) => Math.max(2, v - 4))}
+              >
+                <Minus size={16} />
+              </button>
+              <input
+                aria-label="Brush size"
+                className="size-slider"
+                min={2} max={72} step={1}
+                type="range"
+                value={size}
+                onChange={(e) => setSize(Number(e.target.value))}
+              />
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setSize((v) => Math.min(72, v + 4))}
+              >
+                <Plus size={16} />
+              </button>
+              <span
+                className="brush-preview"
+                style={{ "--brush-size": `${size}px` } as CSSProperties}
+              />
+            </div>
+          </div>
+
+          {/* Compact bar — always visible */}
+          <div className="mobile-bar">
             <div className="toolbar-group">
               <button
                 className={`icon-button ${tool === "brush" ? "is-active" : ""}`}
@@ -84,55 +135,46 @@ export function DrawStudio() {
               >
                 <Undo2 size={20} />
               </button>
-              <span
-                className="compact-color"
-                style={{ backgroundColor: color }}
-              />
+              <span className="mobile-color-dot" style={{ backgroundColor: color }} />
             </div>
             <div className="toolbar-group">
               <span className={connected ? "status-dot is-online" : "status-dot"} />
               <button
                 className="icon-button"
                 type="button"
-                onClick={() => setToolbarOpen((v) => !v)}
-                aria-label={toolbarOpen ? "Collapse toolbar" : "Expand toolbar"}
+                onClick={() => setPanelOpen((v) => !v)}
               >
-                {toolbarOpen ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                {panelOpen ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
               </button>
             </div>
           </div>
-        )}
-
-        {/* Full controls */}
-        <div className={`toolbar-full ${toolbarExpanded ? "is-visible" : ""}`}>
-          {!isMobile && (
-            <div className="toolbar-group">
-              <button
-                className={`icon-button ${tool === "brush" ? "is-active" : ""}`}
-                type="button"
-                aria-label="Brush"
-                onClick={() => setTool("brush")}
-              >
-                <Brush size={22} />
-              </button>
-              <button
-                className={`icon-button ${tool === "eraser" ? "is-active" : ""}`}
-                type="button"
-                aria-label="Eraser"
-                onClick={() => setTool("eraser")}
-              >
-                <Eraser size={22} />
-              </button>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Undo"
-                onClick={() => wallRef.current?.undo()}
-              >
-                <Undo2 size={22} />
-              </button>
-            </div>
-          )}
+        </div>
+      ) : (
+        /* ── Desktop: standard bottom toolbar ── */
+        <section className="paint-toolbar" aria-label="Drawing tools">
+          <div className="toolbar-group">
+            <button
+              className={`icon-button ${tool === "brush" ? "is-active" : ""}`}
+              type="button"
+              onClick={() => setTool("brush")}
+            >
+              <Brush size={22} />
+            </button>
+            <button
+              className={`icon-button ${tool === "eraser" ? "is-active" : ""}`}
+              type="button"
+              onClick={() => setTool("eraser")}
+            >
+              <Eraser size={22} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => wallRef.current?.undo()}
+            >
+              <Undo2 size={22} />
+            </button>
+          </div>
 
           <div className="toolbar-group color-group">
             {DEFAULT_COLORS.map((swatch) => (
@@ -156,43 +198,31 @@ export function DrawStudio() {
           </div>
 
           <div className="toolbar-group size-group">
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => setSize((v) => Math.max(2, v - 4))}
-            >
+            <button className="icon-button" type="button" onClick={() => setSize((v) => Math.max(2, v - 4))}>
               <Minus size={20} />
             </button>
             <input
               aria-label="Brush size"
               className="size-slider"
-              min={2}
-              max={72}
-              step={1}
+              min={2} max={72} step={1}
               type="range"
               value={size}
               onChange={(e) => setSize(Number(e.target.value))}
             />
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => setSize((v) => Math.min(72, v + 4))}
-            >
+            <button className="icon-button" type="button" onClick={() => setSize((v) => Math.min(72, v + 4))}>
               <Plus size={20} />
             </button>
             <span className="brush-preview" style={{ "--brush-size": `${size}px` } as CSSProperties} />
           </div>
 
-          {!isMobile && (
-            <div className="toolbar-status">
-              <span className={connected ? "status-dot is-online" : "status-dot"} />
-              <span>{connected ? "Live" : "Offline"}</span>
-              <span>{stats.onlineCount}</span>
-              <span>{stats.strokeCount}</span>
-            </div>
-          )}
-        </div>
-      </section>
+          <div className="toolbar-status">
+            <span className={connected ? "status-dot is-online" : "status-dot"} />
+            <span>{connected ? "Live" : "Offline"}</span>
+            <span>{stats.onlineCount}</span>
+            <span>{stats.strokeCount}</span>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
