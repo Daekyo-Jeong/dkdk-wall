@@ -472,6 +472,9 @@ button {
   background:
     radial-gradient(circle at 18% 0%, rgba(79, 209, 197, 0.12), transparent 30%),
     linear-gradient(180deg, #171311 0%, #0f0d0c 100%);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .air-header {

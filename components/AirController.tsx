@@ -8,10 +8,9 @@ import { clamp, DEFAULT_COLORS, WALL_SIZE, generateId, type WallTool } from "@/l
 type AimPoint = { x: number; y: number };
 
 const SEND_INTERVAL_MS = 33;
-const VELOCITY_DECAY = 0.85;
-const MOTION_SENSITIVITY = 280;
-const MOTION_THRESHOLD = 0.2;
-const GRAVITY_ALPHA = 0.8;
+const AIR_PITCH_RANGE = 35;
+const AIR_YAW_RANGE = 45;
+const AIR_SMOOTHING = 0.2;
 const CENTER_POINT: AimPoint = { x: WALL_SIZE.width / 2, y: WALL_SIZE.height / 2 };
 
 function getOrCreateAirUserId() {
@@ -26,9 +25,7 @@ export function AirController() {
   const socketRef = useRef<Socket | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const pointRef = useRef<AimPoint>(CENTER_POINT);
-  const velRef = useRef({ x: 0, y: 0 });
-  const gravityRef = useRef({ x: 0, y: 0 });
-  const sendTimerRef = useRef<number | null>(null);
+  const orientationZeroRef = useRef<{ beta: number; gamma: number } | null>(null);
 
   const [connected, setConnected] = useState(false);
   const [tool, setTool] = useState<WallTool>("brush");
@@ -48,7 +45,7 @@ export function AirController() {
       left: `${(aimPoint.x / WALL_SIZE.width) * 100}%`,
       top: `${(aimPoint.y / WALL_SIZE.height) * 100}%`,
       borderColor: color,
-      boxShadow: `0 0 0 5px ${color}30`,
+      boxShadow: `0 0 0 5px ${color}30`
     }),
     [aimPoint.x, aimPoint.y, color]
   );
@@ -72,11 +69,7 @@ export function AirController() {
     };
     send();
     const timer = window.setInterval(send, SEND_INTERVAL_MS);
-    sendTimerRef.current = timer;
-    return () => {
-      window.clearInterval(timer);
-      sendTimerRef.current = null;
-    };
+    return () => window.clearInterval(timer);
   }, [color, size, spraying, tool, userId]);
 
   useEffect(() => {
@@ -84,55 +77,44 @@ export function AirController() {
 
     let gotEvent = false;
 
-    const onMotion = (event: DeviceMotionEvent) => {
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      if (typeof event.gamma !== "number" || typeof event.beta !== "number") return;
       if (!gotEvent) {
         gotEvent = true;
         setMotionStatus("Motion live");
       }
 
-      const dt = 0.016;
+      const zero = orientationZeroRef.current ?? { beta: event.beta, gamma: event.gamma };
+      orientationZeroRef.current = zero;
 
-      // Use linear acceleration if available, otherwise subtract estimated gravity
-      let ax: number;
-      let ay: number;
+      const deltaYaw = clamp(event.gamma - zero.gamma, -AIR_YAW_RANGE, AIR_YAW_RANGE);
+      const deltaPitch = clamp(event.beta - zero.beta, -AIR_PITCH_RANGE, AIR_PITCH_RANGE);
+      const mappedX = ((deltaYaw + AIR_YAW_RANGE) / (AIR_YAW_RANGE * 2)) * WALL_SIZE.width;
+      const mappedY = ((deltaPitch + AIR_PITCH_RANGE) / (AIR_PITCH_RANGE * 2)) * WALL_SIZE.height;
 
-      if (event.acceleration?.x != null) {
-        ax = event.acceleration.x ?? 0;
-        ay = event.acceleration.y ?? 0;
-      } else {
-        const rawX = event.accelerationIncludingGravity?.x ?? 0;
-        const rawY = event.accelerationIncludingGravity?.y ?? 0;
-        gravityRef.current.x = GRAVITY_ALPHA * gravityRef.current.x + (1 - GRAVITY_ALPHA) * rawX;
-        gravityRef.current.y = GRAVITY_ALPHA * gravityRef.current.y + (1 - GRAVITY_ALPHA) * rawY;
-        ax = rawX - gravityRef.current.x;
-        ay = rawY - gravityRef.current.y;
-      }
-
-      // Dead zone
-      const fx = Math.abs(ax) > MOTION_THRESHOLD ? ax : 0;
-      const fy = Math.abs(ay) > MOTION_THRESHOLD ? ay : 0;
-
-      // Integrate: acceleration → velocity → position
-      // ax positive = phone moved right → wall x increases
-      // ay positive = phone moved up → wall y decreases (screen y is inverted)
-      velRef.current.x = velRef.current.x * VELOCITY_DECAY + fx * MOTION_SENSITIVITY * dt;
-      velRef.current.y = velRef.current.y * VELOCITY_DECAY + (-fy) * MOTION_SENSITIVITY * dt;
-
-      const nextX = clamp(pointRef.current.x + velRef.current.x, 0, WALL_SIZE.width);
-      const nextY = clamp(pointRef.current.y + velRef.current.y, 0, WALL_SIZE.height);
+      const nextX = clamp(
+        pointRef.current.x + (mappedX - pointRef.current.x) * AIR_SMOOTHING,
+        0,
+        WALL_SIZE.width
+      );
+      const nextY = clamp(
+        pointRef.current.y + (mappedY - pointRef.current.y) * AIR_SMOOTHING,
+        0,
+        WALL_SIZE.height
+      );
       const next = { x: nextX, y: nextY };
       pointRef.current = next;
       setAimPoint(next);
     };
 
-    window.addEventListener("devicemotion", onMotion);
+    window.addEventListener("deviceorientation", onOrientation);
     const checkTimer = window.setTimeout(() => {
       if (!gotEvent) setMotionStatus("No sensor (HTTPS/permission required)");
     }, 1500);
 
     return () => {
       window.clearTimeout(checkTimer);
-      window.removeEventListener("devicemotion", onMotion);
+      window.removeEventListener("deviceorientation", onOrientation);
     };
   }, [mode, motionEnabled]);
 
@@ -144,7 +126,7 @@ export function AirController() {
     const y = clamp(((clientY - rect.top) / rect.height) * WALL_SIZE.height, 0, WALL_SIZE.height);
     const next = { x, y };
     pointRef.current = next;
-    velRef.current = { x: 0, y: 0 }; // reset velocity on touch reposition
+    orientationZeroRef.current = null; // recalibrate from new touch position
     setAimPoint(next);
   }
 
@@ -158,6 +140,7 @@ export function AirController() {
       ).requestPermission;
 
       setMode("air");
+      orientationZeroRef.current = null;
 
       if (typeof orientationRequest === "function") {
         const result = await orientationRequest();
@@ -176,19 +159,20 @@ export function AirController() {
   }
 
   function sendUndo() {
-    const socket = socketRef.current;
-    if (!socket || userId === "loading") return;
-    socket.emit("stroke:undo", { userId });
+    socketRef.current?.emit("stroke:undo", { userId });
   }
 
   function recenter() {
     pointRef.current = CENTER_POINT;
-    velRef.current = { x: 0, y: 0 };
+    orientationZeroRef.current = null;
     setAimPoint(CENTER_POINT);
   }
 
   return (
-    <main className="air-shell">
+    <main
+      className="air-shell"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <header className="air-header">
         <div>
           <p className="eyebrow">Mobile Controller</p>
@@ -260,7 +244,7 @@ export function AirController() {
             step={1}
             type="range"
             value={size}
-            onChange={(event) => setSize(Number(event.target.value))}
+            onChange={(e) => setSize(Number(e.target.value))}
           />
           <span className="air-size-label">{size}px</span>
         </div>
@@ -270,20 +254,16 @@ export function AirController() {
         <div
           ref={surfaceRef}
           className={`air-surface ${spraying ? "is-spraying" : ""}`}
-          onPointerDown={(event) => {
-            setPointFromTouch(event.clientX, event.clientY);
+          onPointerDown={(e) => {
+            setPointFromTouch(e.clientX, e.clientY);
             if (mode === "touch") setSpraying(true);
           }}
-          onPointerMove={(event) => {
-            if (mode === "touch" && event.buttons !== 1) return;
-            setPointFromTouch(event.clientX, event.clientY);
+          onPointerMove={(e) => {
+            if (mode === "touch" && e.buttons !== 1) return;
+            setPointFromTouch(e.clientX, e.clientY);
           }}
-          onPointerUp={() => {
-            if (mode === "touch") setSpraying(false);
-          }}
-          onPointerCancel={() => {
-            if (mode === "touch") setSpraying(false);
-          }}
+          onPointerUp={() => { if (mode === "touch") setSpraying(false); }}
+          onPointerCancel={() => { if (mode === "touch") setSpraying(false); }}
         >
           <span className="air-indicator" style={indicatorStyle} />
         </div>
@@ -301,6 +281,14 @@ export function AirController() {
           <button className="icon-button" type="button" onClick={recenter}>
             Recenter
           </button>
+          {mode === "air" && (
+            <button className="icon-button" type="button" onClick={() => {
+              orientationZeroRef.current = null;
+              setMotionStatus("Calibrating...");
+            }}>
+              Calibrate
+            </button>
+          )}
         </div>
       </section>
     </main>
