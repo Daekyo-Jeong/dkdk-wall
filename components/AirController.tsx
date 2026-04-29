@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-import { Brush, Eraser, Smartphone, Undo2, Waves } from "lucide-react";
+import { Brush, Crosshair, Eraser, RefreshCw, Smartphone, SprayCan, Undo2, Waves } from "lucide-react";
 import { clamp, DEFAULT_COLORS, WALL_SIZE, generateId, type WallTool } from "@/lib/wall";
 
 type AimPoint = { x: number; y: number };
 
 const SEND_INTERVAL_MS = 33;
-const AIR_PITCH_RANGE = 35;
-const AIR_YAW_RANGE = 45;
-const AIR_SMOOTHING = 0.2;
+const VELOCITY_DECAY = 0.88;
+const MOTION_SENSITIVITY = 140;
+const MOTION_THRESHOLD = 0.3;
+const GRAVITY_ALPHA = 0.8;
 const CENTER_POINT: AimPoint = { x: WALL_SIZE.width / 2, y: WALL_SIZE.height / 2 };
 
 function getOrCreateAirUserId() {
@@ -25,7 +26,8 @@ export function AirController() {
   const socketRef = useRef<Socket | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const pointRef = useRef<AimPoint>(CENTER_POINT);
-  const orientationZeroRef = useRef<{ beta: number; gamma: number } | null>(null);
+  const velRef = useRef({ x: 0, y: 0 });
+  const gravityRef = useRef({ x: 0, y: 0 });
 
   const [connected, setConnected] = useState(false);
   const [tool, setTool] = useState<WallTool>("brush");
@@ -36,7 +38,7 @@ export function AirController() {
     typeof window === "undefined" ? "loading" : getOrCreateAirUserId()
   );
   const [motionEnabled, setMotionEnabled] = useState(false);
-  const [motionStatus, setMotionStatus] = useState("Motion off");
+  const [motionStatus, setMotionStatus] = useState("off");
   const [aimPoint, setAimPoint] = useState<AimPoint>(CENTER_POINT);
   const [spraying, setSpraying] = useState(false);
 
@@ -45,9 +47,11 @@ export function AirController() {
       left: `${(aimPoint.x / WALL_SIZE.width) * 100}%`,
       top: `${(aimPoint.y / WALL_SIZE.height) * 100}%`,
       borderColor: color,
-      boxShadow: `0 0 0 5px ${color}30`
+      boxShadow: spraying
+        ? `0 0 0 6px ${color}50, 0 0 16px 4px ${color}40`
+        : `0 0 0 4px ${color}28`
     }),
-    [aimPoint.x, aimPoint.y, color]
+    [aimPoint.x, aimPoint.y, color, spraying]
   );
 
   useEffect(() => {
@@ -55,10 +59,7 @@ export function AirController() {
     socketRef.current = socket;
     socket.on("connect", () => setConnected(true));
     socket.on("disconnect", () => setConnected(false));
-    return () => {
-      socket.disconnect();
-      socketRef.current = null;
-    };
+    return () => { socket.disconnect(); socketRef.current = null; };
   }, []);
 
   useEffect(() => {
@@ -77,44 +78,46 @@ export function AirController() {
 
     let gotEvent = false;
 
-    const onOrientation = (event: DeviceOrientationEvent) => {
-      if (typeof event.gamma !== "number" || typeof event.beta !== "number") return;
-      if (!gotEvent) {
-        gotEvent = true;
-        setMotionStatus("Motion live");
+    const onMotion = (event: DeviceMotionEvent) => {
+      if (!gotEvent) { gotEvent = true; setMotionStatus("live"); }
+
+      const dt = 0.016;
+      let ax: number;
+      let ay: number;
+
+      if (event.acceleration?.x != null) {
+        ax = event.acceleration.x ?? 0;
+        ay = event.acceleration.y ?? 0;
+      } else {
+        const rawX = event.accelerationIncludingGravity?.x ?? 0;
+        const rawY = event.accelerationIncludingGravity?.y ?? 0;
+        gravityRef.current.x = GRAVITY_ALPHA * gravityRef.current.x + (1 - GRAVITY_ALPHA) * rawX;
+        gravityRef.current.y = GRAVITY_ALPHA * gravityRef.current.y + (1 - GRAVITY_ALPHA) * rawY;
+        ax = rawX - gravityRef.current.x;
+        ay = rawY - gravityRef.current.y;
       }
 
-      const zero = orientationZeroRef.current ?? { beta: event.beta, gamma: event.gamma };
-      orientationZeroRef.current = zero;
+      const fx = Math.abs(ax) > MOTION_THRESHOLD ? ax : 0;
+      const fy = Math.abs(ay) > MOTION_THRESHOLD ? ay : 0;
 
-      const deltaYaw = clamp(event.gamma - zero.gamma, -AIR_YAW_RANGE, AIR_YAW_RANGE);
-      const deltaPitch = clamp(event.beta - zero.beta, -AIR_PITCH_RANGE, AIR_PITCH_RANGE);
-      const mappedX = ((deltaYaw + AIR_YAW_RANGE) / (AIR_YAW_RANGE * 2)) * WALL_SIZE.width;
-      const mappedY = ((deltaPitch + AIR_PITCH_RANGE) / (AIR_PITCH_RANGE * 2)) * WALL_SIZE.height;
+      velRef.current.x = velRef.current.x * VELOCITY_DECAY + fx * MOTION_SENSITIVITY * dt;
+      velRef.current.y = velRef.current.y * VELOCITY_DECAY + (-fy) * MOTION_SENSITIVITY * dt;
 
-      const nextX = clamp(
-        pointRef.current.x + (mappedX - pointRef.current.x) * AIR_SMOOTHING,
-        0,
-        WALL_SIZE.width
-      );
-      const nextY = clamp(
-        pointRef.current.y + (mappedY - pointRef.current.y) * AIR_SMOOTHING,
-        0,
-        WALL_SIZE.height
-      );
+      const nextX = clamp(pointRef.current.x + velRef.current.x, 0, WALL_SIZE.width);
+      const nextY = clamp(pointRef.current.y + velRef.current.y, 0, WALL_SIZE.height);
       const next = { x: nextX, y: nextY };
       pointRef.current = next;
       setAimPoint(next);
     };
 
-    window.addEventListener("deviceorientation", onOrientation);
+    window.addEventListener("devicemotion", onMotion);
     const checkTimer = window.setTimeout(() => {
-      if (!gotEvent) setMotionStatus("No sensor (HTTPS/permission required)");
+      if (!gotEvent) setMotionStatus("no sensor");
     }, 1500);
 
     return () => {
       window.clearTimeout(checkTimer);
-      window.removeEventListener("deviceorientation", onOrientation);
+      window.removeEventListener("devicemotion", onMotion);
     };
   }, [mode, motionEnabled]);
 
@@ -126,7 +129,7 @@ export function AirController() {
     const y = clamp(((clientY - rect.top) / rect.height) * WALL_SIZE.height, 0, WALL_SIZE.height);
     const next = { x, y };
     pointRef.current = next;
-    orientationZeroRef.current = null; // recalibrate from new touch position
+    velRef.current = { x: 0, y: 0 };
     setAimPoint(next);
   }
 
@@ -140,57 +143,51 @@ export function AirController() {
       ).requestPermission;
 
       setMode("air");
-      orientationZeroRef.current = null;
+      velRef.current = { x: 0, y: 0 };
+      gravityRef.current = { x: 0, y: 0 };
 
       if (typeof orientationRequest === "function") {
         const result = await orientationRequest();
         if (typeof motionRequest === "function") await motionRequest();
         const granted = result === "granted";
         setMotionEnabled(granted);
-        setMotionStatus(granted ? "Permission granted" : "Permission denied");
+        setMotionStatus(granted ? "ready" : "denied");
         return;
       }
       setMotionEnabled(true);
-      setMotionStatus("Motion enabled");
+      setMotionStatus("ready");
     } catch {
       setMotionEnabled(false);
-      setMotionStatus("Motion permission error");
+      setMotionStatus("error");
     }
-  }
-
-  function sendUndo() {
-    socketRef.current?.emit("stroke:undo", { userId });
   }
 
   function recenter() {
     pointRef.current = CENTER_POINT;
-    orientationZeroRef.current = null;
+    velRef.current = { x: 0, y: 0 };
     setAimPoint(CENTER_POINT);
   }
 
   return (
-    <main
-      className="air-shell"
-      onContextMenu={(e) => e.preventDefault()}
-    >
+    <main className="air-shell" onContextMenu={(e) => e.preventDefault()}>
       <header className="air-header">
-        <div>
-          <p className="eyebrow">Mobile Controller</p>
-          <h1>Air Spray</h1>
+        <div className="air-title">
+          <p className="eyebrow">Air Spray</p>
+          <div className="air-status">
+            <span className={connected ? "status-dot is-online" : "status-dot"} />
+            <span className="air-status-text">
+              {connected ? "live" : "offline"}
+              {mode === "air" && ` · ${motionStatus}`}
+            </span>
+          </div>
         </div>
-        <div className="air-status">
-          <span className={connected ? "status-dot is-online" : "status-dot"} />
-          <span>{connected ? "Live" : "Offline"}</span>
-          <span>{motionStatus}</span>
-        </div>
-      </header>
 
-      <section className="air-controls">
         <div className="toolbar-group">
           <button
             className={`icon-button ${mode === "touch" ? "is-active" : ""}`}
             type="button"
             onClick={() => setMode("touch")}
+            title="Touch mode"
           >
             <Smartphone size={18} />
           </button>
@@ -198,6 +195,7 @@ export function AirController() {
             className={`icon-button ${mode === "air" ? "is-active" : ""}`}
             type="button"
             onClick={enableMotion}
+            title="Motion mode"
           >
             <Waves size={18} />
           </button>
@@ -205,6 +203,7 @@ export function AirController() {
             className={`icon-button ${tool === "brush" ? "is-active" : ""}`}
             type="button"
             onClick={() => setTool("brush")}
+            title="Brush"
           >
             <Brush size={18} />
           </button>
@@ -212,14 +211,22 @@ export function AirController() {
             className={`icon-button ${tool === "eraser" ? "is-active" : ""}`}
             type="button"
             onClick={() => setTool("eraser")}
+            title="Eraser"
           >
             <Eraser size={18} />
           </button>
-          <button className="icon-button" type="button" onClick={sendUndo}>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => socketRef.current?.emit("stroke:undo", { userId })}
+            title="Undo"
+          >
             <Undo2 size={18} />
           </button>
         </div>
+      </header>
 
+      <section className="air-controls">
         <div className="toolbar-group color-group">
           {DEFAULT_COLORS.map((swatch) => (
             <button
@@ -227,14 +234,10 @@ export function AirController() {
               className={`swatch ${color === swatch ? "is-active" : ""}`}
               style={{ backgroundColor: swatch }}
               type="button"
-              onClick={() => {
-                setColor(swatch);
-                setTool("brush");
-              }}
+              onClick={() => { setColor(swatch); setTool("brush"); }}
             />
           ))}
         </div>
-
         <div className="toolbar-group size-group">
           <input
             aria-label="Brush size"
@@ -265,10 +268,19 @@ export function AirController() {
           onPointerUp={() => { if (mode === "touch") setSpraying(false); }}
           onPointerCancel={() => { if (mode === "touch") setSpraying(false); }}
         >
-          <span className="air-indicator" style={indicatorStyle} />
+          <span className={`air-indicator ${spraying ? "is-spraying" : ""}`} style={indicatorStyle} />
         </div>
 
         <div className="air-actions">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={recenter}
+            title="Recenter"
+          >
+            <Crosshair size={18} />
+          </button>
+
           <button
             className={`air-spray-button ${spraying ? "is-spraying" : ""}`}
             type="button"
@@ -276,18 +288,20 @@ export function AirController() {
             onPointerUp={() => setSpraying(false)}
             onPointerCancel={() => setSpraying(false)}
           >
-            Hold to Spray
+            <SprayCan size={22} />
           </button>
-          <button className="icon-button" type="button" onClick={recenter}>
-            Recenter
-          </button>
-          {mode === "air" && (
-            <button className="icon-button" type="button" onClick={() => {
-              orientationZeroRef.current = null;
-              setMotionStatus("Calibrating...");
-            }}>
-              Calibrate
+
+          {mode === "air" ? (
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => { velRef.current = { x: 0, y: 0 }; gravityRef.current = { x: 0, y: 0 }; setMotionStatus("ready"); }}
+              title="Reset drift"
+            >
+              <RefreshCw size={18} />
             </button>
+          ) : (
+            <div style={{ width: 44 }} />
           )}
         </div>
       </section>

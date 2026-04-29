@@ -484,16 +484,28 @@ button {
   gap: 12px;
 }
 
-.air-header h1,
-.air-header p {
+.air-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.air-title .eyebrow {
   margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .air-status {
   display: inline-flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+}
+
+.air-status-text {
   color: var(--muted);
+  font-size: 12px;
 }
 
 .air-controls {
@@ -501,14 +513,15 @@ button {
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(20, 18, 16, 0.9);
 }
 
 .air-size-label {
-  min-width: 48px;
+  min-width: 36px;
   color: var(--muted);
   font-size: 12px;
+  text-align: right;
 }
 
 .air-stage {
@@ -535,32 +548,55 @@ button {
 
 .air-indicator {
   position: absolute;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border: 2px solid var(--accent);
   border-radius: 999px;
-  box-shadow: 0 0 0 5px rgba(79, 209, 197, 0.18);
   transform: translate(-50%, -50%);
+  transition: box-shadow 120ms ease;
+  pointer-events: none;
+}
+
+.air-indicator.is-spraying {
+  animation: indicator-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes indicator-pulse {
+  from { transform: translate(-50%, -50%) scale(1); }
+  to   { transform: translate(-50%, -50%) scale(1.6); opacity: 0.7; }
 }
 
 .air-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
   gap: 10px;
+  align-items: center;
 }
 
 .air-spray-button {
-  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
   border: 1px solid rgba(79, 209, 197, 0.35);
-  border-radius: 10px;
-  background: rgba(79, 209, 197, 0.12);
-  color: #dbfff8;
-  font-weight: 700;
+  border-radius: 14px;
+  background: rgba(79, 209, 197, 0.1);
+  color: rgba(79, 209, 197, 0.7);
+  cursor: pointer;
+  transition:
+    background 100ms ease,
+    border-color 100ms ease,
+    color 100ms ease,
+    transform 80ms ease;
 }
 
+.air-spray-button:active,
 .air-spray-button.is-spraying {
-  border-color: rgba(79, 209, 197, 0.8);
-  background: rgba(79, 209, 197, 0.24);
+  border-color: rgba(79, 209, 197, 0.9);
+  background: rgba(79, 209, 197, 0.22);
+  color: #dbfff8;
+  transform: scale(0.97);
+  box-shadow: 0 0 20px rgba(79, 209, 197, 0.2);
 }
 
 .remote-cursor {
