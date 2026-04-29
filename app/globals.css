@@ -559,3 +559,26 @@ button {
   border-color: rgba(79, 209, 197, 0.8);
   background: rgba(79, 209, 197, 0.24);
 }
+
+.remote-cursor {
+  position: absolute;
+  z-index: 10;
+  width: 20px;
+  height: 20px;
+  border: 2px solid;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition:
+    left 50ms linear,
+    top 50ms linear;
+}
+
+.remote-cursor.is-spraying {
+  animation: cursor-pulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes cursor-pulse {
+  from { transform: translate(-50%, -50%) scale(1); }
+  to   { transform: translate(-50%, -50%) scale(1.5); }
+}

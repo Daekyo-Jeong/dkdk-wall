@@ -230,10 +230,11 @@ export const GraffitiWall = forwardRef<GraffitiWallHandle, GraffitiWallProps>(
     const activeLocalRef = useRef<Stroke | null>(null);
     const pointerIdRef = useRef<number | null>(null);
     const [connected, setConnected] = useState(false);
-    const [stats, setStats] = useState<WallStats>({
-      onlineCount: 0,
-      strokeCount: 0
-    });
+    const [stats, setStats] = useState<WallStats>({ onlineCount: 0, strokeCount: 0 });
+    const [remoteCursors, setRemoteCursors] = useState<
+      Map<string, { point: Point; color: string; size: number; spraying: boolean }>
+    >(new Map());
+    const cursorTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
     const redraw = useCallback(() => {
       const context = getCanvasContext(canvasRef.current);
@@ -320,9 +321,49 @@ export const GraffitiWall = forwardRef<GraffitiWallHandle, GraffitiWallProps>(
         requestAnimationFrame(redraw);
       });
 
+      const removeCursor = (userId: string) => {
+        const t = cursorTimersRef.current.get(userId);
+        if (t) clearTimeout(t);
+        cursorTimersRef.current.delete(userId);
+        setRemoteCursors((prev) => {
+          const next = new Map(prev);
+          next.delete(userId);
+          return next;
+        });
+      };
+
+      socket.on(
+        "cursor:update",
+        (payload: { userId: string; point: Point; color: string; size: number; spraying: boolean }) => {
+          setRemoteCursors((prev) => {
+            const next = new Map(prev);
+            next.set(payload.userId, {
+              point: payload.point,
+              color: payload.color,
+              size: payload.size,
+              spraying: payload.spraying
+            });
+            return next;
+          });
+          // Auto-remove cursor if no updates for 5s
+          const prev = cursorTimersRef.current.get(payload.userId);
+          if (prev) clearTimeout(prev);
+          cursorTimersRef.current.set(
+            payload.userId,
+            setTimeout(() => removeCursor(payload.userId), 5000)
+          );
+        }
+      );
+
+      socket.on("cursor:remove", (payload: { userId: string }) => {
+        removeCursor(payload.userId);
+      });
+
       return () => {
         socket.disconnect();
         socketRef.current = null;
+        cursorTimersRef.current.forEach(clearTimeout);
+        cursorTimersRef.current.clear();
       };
     }, [redraw]);
 
@@ -439,6 +480,20 @@ export const GraffitiWall = forwardRef<GraffitiWallHandle, GraffitiWallProps>(
             height={WALL_SIZE.height}
             aria-hidden="true"
           />
+          {Array.from(remoteCursors.entries()).map(([uid, cursor]) => (
+            <span
+              key={uid}
+              className={`remote-cursor ${cursor.spraying ? "is-spraying" : ""}`}
+              style={{
+                left: `${(cursor.point.x / WALL_SIZE.width) * 100}%`,
+                top: `${(cursor.point.y / WALL_SIZE.height) * 100}%`,
+                borderColor: cursor.color,
+                boxShadow: cursor.spraying
+                  ? `0 0 0 4px ${cursor.color}40, 0 0 12px 2px ${cursor.color}60`
+                  : `0 0 0 3px ${cursor.color}30`
+              }}
+            />
+          ))}
         </div>
       </div>
     );

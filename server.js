@@ -30,6 +30,7 @@ const handle = app.getRequestHandler();
 let strokes = [];
 const activeStrokes = new Map();
 const activeAirStrokes = new Map();
+const socketAirUsers = new Map();
 let persistTimer = null;
 
 function clamp(value, min, max) {
@@ -303,6 +304,15 @@ async function start() {
         return;
       }
 
+      socketAirUsers.set(socket.id, update.userId);
+      socket.broadcast.emit("cursor:update", {
+        userId: update.userId,
+        point: update.point,
+        color: update.color,
+        size: update.size,
+        spraying: update.spraying
+      });
+
       const activeId = activeAirStrokes.get(socket.id);
 
       if (!update.spraying) {
@@ -385,6 +395,12 @@ async function start() {
     });
 
     socket.on("disconnect", () => {
+      const airUserId = socketAirUsers.get(socket.id);
+      if (airUserId) {
+        socketAirUsers.delete(socket.id);
+        socket.broadcast.emit("cursor:remove", { userId: airUserId });
+      }
+
       const activeId = activeAirStrokes.get(socket.id);
       if (activeId) {
         const stroke = activeStrokes.get(activeId);
