@@ -12,6 +12,7 @@ const VELOCITY_DECAY = 0.88;
 const MOTION_SENSITIVITY = 140;
 const MOTION_THRESHOLD = 0.3;
 const GRAVITY_ALPHA = 0.8;
+const DISPLAY_FACING_X_MULTIPLIER = -1;
 const CENTER_POINT: AimPoint = { x: WALL_SIZE.width / 2, y: WALL_SIZE.height / 2 };
 
 function getOrCreateAirUserId() {
@@ -100,7 +101,9 @@ export function AirController() {
       const fx = Math.abs(ax) > MOTION_THRESHOLD ? ax : 0;
       const fy = Math.abs(ay) > MOTION_THRESHOLD ? ay : 0;
 
-      velRef.current.x = velRef.current.x * VELOCITY_DECAY + fx * MOTION_SENSITIVITY * dt;
+      velRef.current.x =
+        velRef.current.x * VELOCITY_DECAY +
+        fx * DISPLAY_FACING_X_MULTIPLIER * MOTION_SENSITIVITY * dt;
       velRef.current.y = velRef.current.y * VELOCITY_DECAY + (-fy) * MOTION_SENSITIVITY * dt;
 
       const nextX = clamp(pointRef.current.x + velRef.current.x, 0, WALL_SIZE.width);

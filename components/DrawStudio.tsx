@@ -5,12 +5,22 @@ import { Brush, ChevronDown, ChevronUp, Circle, Eraser, Minus, Plus, Undo2 } fro
 import { DEFAULT_COLORS, generateId, type WallStats, type WallTool } from "@/lib/wall";
 import { GraffitiWall, type GraffitiWallHandle } from "@/components/GraffitiWall";
 
+const MOBILE_QUERY = "(max-width: 680px)";
+
 function getOrCreateUserId() {
   const saved = window.localStorage.getItem("wall-user-id");
   if (saved) return saved;
   const next = generateId();
   window.localStorage.setItem("wall-user-id", next);
   return next;
+}
+
+function getInitialUserId() {
+  return typeof window === "undefined" ? "loading" : getOrCreateUserId();
+}
+
+function getInitialIsMobile() {
+  return typeof window !== "undefined" && window.matchMedia(MOBILE_QUERY).matches;
 }
 
 export function DrawStudio() {
@@ -20,17 +30,12 @@ export function DrawStudio() {
   const [size, setSize] = useState(18);
   const [connected, setConnected] = useState(false);
   const [stats, setStats] = useState<WallStats>({ onlineCount: 0, strokeCount: 0 });
-  const [userId, setUserId] = useState("loading");
-  const [isMobile, setIsMobile] = useState(false);
+  const [userId] = useState(getInitialUserId);
+  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
   const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
-    setUserId(getOrCreateUserId());
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 680px)");
-    setIsMobile(mq.matches);
+    const mq = window.matchMedia(MOBILE_QUERY);
     const handler = (e: MediaQueryListEvent) => {
       setIsMobile(e.matches);
       if (!e.matches) setPanelOpen(false);

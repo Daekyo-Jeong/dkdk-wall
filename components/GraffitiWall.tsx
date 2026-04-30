@@ -294,6 +294,8 @@ export const GraffitiWall = forwardRef<GraffitiWallHandle, GraffitiWallProps>(
         });
       });
 
+      const cursorTimers = cursorTimersRef.current;
+
       socket.on("stroke:begin", (stroke: Stroke) => {
         activeRemoteRef.current.set(stroke.id, stroke);
         const context = getCanvasContext(canvasRef.current);
@@ -362,8 +364,8 @@ export const GraffitiWall = forwardRef<GraffitiWallHandle, GraffitiWallProps>(
       return () => {
         socket.disconnect();
         socketRef.current = null;
-        cursorTimersRef.current.forEach(clearTimeout);
-        cursorTimersRef.current.clear();
+        cursorTimers.forEach(clearTimeout);
+        cursorTimers.clear();
       };
     }, [redraw]);
 
