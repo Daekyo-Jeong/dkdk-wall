@@ -331,9 +331,10 @@ export function AirController() {
             }
           }}
           onPointerMove={(e) => {
-            if (isSensor && e.buttons === 1) {
+            if (isSensor) {
+              // setPointerCapture로 캡처 중이므로 buttons 체크 불필요
               setSize(sizeFromY(e.clientY));
-            } else if (!isSensor && e.buttons === 1) {
+            } else if (e.buttons === 1) {
               setPointFromTouch(e.clientX, e.clientY);
             }
           }}
