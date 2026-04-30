@@ -641,15 +641,23 @@ button {
 }
 
 .air-motion-controls {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .air-motion-control {
   display: grid;
+  flex: 1 1 80px;
   min-width: 0;
+  gap: 6px;
+}
+
+.air-flip-group {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
   gap: 6px;
 }
 
@@ -786,7 +794,7 @@ button {
 
 @media (max-width: 680px) {
   .air-motion-controls {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   .air-motion-control {
@@ -794,7 +802,11 @@ button {
     align-items: center;
   }
 
+  .air-flip-group {
+    flex-direction: row;
+  }
+
   .air-toggle-button {
-    width: 100%;
+    flex: 1;
   }
 }
