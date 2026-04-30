@@ -11,3 +11,4 @@ certs/*.pem
 data/wall-state.json
 data/*.tmp
 .DS_Store
+*.tsbuildinfo
