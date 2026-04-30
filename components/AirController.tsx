@@ -55,6 +55,7 @@ export function AirController() {
   const socketRef        = useRef<Socket | null>(null);
   const surfaceRef       = useRef<HTMLDivElement | null>(null);
   const pointRef         = useRef<AimPoint>(CENTER_POINT);
+  const sprayingRef      = useRef(false); // 윈도우 리스너와 동기 공유
   const velRef           = useRef({ x: 0, y: 0 });
   const gravityRef       = useRef({ x: 0, y: 0 });
   const zeroOrientRef    = useRef<OrientPt>({ alpha: 0, gamma: 0, beta: 0 });
@@ -185,6 +186,43 @@ export function AirController() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, motionEnabled]);
 
+  const isSensor = mode === "fusion";
+
+  // ── 센서 모드: 윈도우 레벨 드래그 추적 ───────────────────────
+  //    pointermove + touchmove 둘 다 처리해 iOS/Android 호환
+  useEffect(() => {
+    if (!isSensor) return;
+
+    const calcSize = (clientY: number) => {
+      if (!sprayingRef.current) return;
+      const el = surfaceRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const t = clamp((clientY - r.top) / r.height, 0, 1);
+      setSize(Math.round(4 + t * 68));
+    };
+
+    const onPointerMove = (e: PointerEvent) => calcSize(e.clientY);
+    const onTouchMove   = (e: TouchEvent)   => { if (e.touches.length) calcSize(e.touches[0].clientY); };
+    const stopSpray     = () => { sprayingRef.current = false; setSpraying(false); };
+
+    window.addEventListener("pointermove",   onPointerMove);
+    window.addEventListener("touchmove",     onTouchMove, { passive: true });
+    window.addEventListener("pointerup",     stopSpray);
+    window.addEventListener("pointercancel", stopSpray);
+    window.addEventListener("touchend",      stopSpray);
+    window.addEventListener("touchcancel",   stopSpray);
+
+    return () => {
+      window.removeEventListener("pointermove",   onPointerMove);
+      window.removeEventListener("touchmove",     onTouchMove);
+      window.removeEventListener("pointerup",     stopSpray);
+      window.removeEventListener("pointercancel", stopSpray);
+      window.removeEventListener("touchend",      stopSpray);
+      window.removeEventListener("touchcancel",   stopSpray);
+    };
+  }, [isSensor]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── 터치 위치 (touch 모드) ─────────────────────────────────────
   function setPointFromTouch(cx: number, cy: number) {
     const el = surfaceRef.current;
@@ -197,15 +235,6 @@ export function AirController() {
     pointRef.current = next;
     velRef.current   = { x: 0, y: 0 };
     setAimPoint(next);
-  }
-
-  // ── 트랙패드 Y → 브러시 굵기 (센서 모드) ─────────────────────
-  function sizeFromY(clientY: number): number {
-    const el = surfaceRef.current;
-    if (!el) return size;
-    const r = el.getBoundingClientRect();
-    const t = clamp((clientY - r.top) / r.height, 0, 1);
-    return Math.round(4 + t * 68); // 상단 4px ~ 하단 72px
   }
 
   // ── 모드 전환 ──────────────────────────────────────────────────
@@ -240,8 +269,6 @@ export function AirController() {
     pointRef.current      = CENTER_POINT;
     setAimPoint(CENTER_POINT);
   }
-
-  const isSensor = mode === "fusion";
 
   return (
     <main className="air-shell" onContextMenu={(e) => e.preventDefault()}>
@@ -321,25 +348,26 @@ export function AirController() {
           ref={surfaceRef}
           className={`air-surface${isSensor ? " air-surface--sensor" : ""}${spraying ? " is-spraying" : ""}`}
           onPointerDown={(e) => {
-            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             if (isSensor) {
-              setSize(sizeFromY(e.clientY));
+              sprayingRef.current = true;
               setSpraying(true);
+              // 초기 굵기 설정
+              const r = e.currentTarget.getBoundingClientRect();
+              const t = clamp((e.clientY - r.top) / r.height, 0, 1);
+              setSize(Math.round(4 + t * 68));
             } else {
               setPointFromTouch(e.clientX, e.clientY);
               setSpraying(true);
             }
           }}
           onPointerMove={(e) => {
-            if (isSensor) {
-              // setPointerCapture로 캡처 중이므로 buttons 체크 불필요
-              setSize(sizeFromY(e.clientY));
-            } else if (e.buttons === 1) {
+            // 센서 모드 이동: 윈도우 리스너가 처리
+            if (!isSensor && e.buttons === 1) {
               setPointFromTouch(e.clientX, e.clientY);
             }
           }}
-          onPointerUp={() => setSpraying(false)}
-          onPointerCancel={() => setSpraying(false)}
+          onPointerUp={() => { if (!isSensor) setSpraying(false); }}
+          onPointerCancel={() => { if (!isSensor) setSpraying(false); }}
         >
           <span className={`air-indicator${spraying ? " is-spraying" : ""}`} style={indicatorStyle} />
         </div>
