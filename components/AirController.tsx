@@ -8,11 +8,10 @@ import { clamp, DEFAULT_COLORS, WALL_SIZE, generateId, type WallTool } from "@/l
 type AimPoint = { x: number; y: number };
 
 const SEND_INTERVAL_MS = 33;
-const VELOCITY_DECAY = 0.88;
-const MOTION_SENSITIVITY = 140;
-const MOTION_THRESHOLD = 0.3;
+const DEFAULT_VELOCITY_DECAY = 0.88;
+const DEFAULT_MOTION_SENSITIVITY = 140;
+const DEFAULT_MOTION_THRESHOLD = 0.3;
 const GRAVITY_ALPHA = 0.8;
-const DISPLAY_FACING_X_MULTIPLIER = -1;
 const CENTER_POINT: AimPoint = { x: WALL_SIZE.width / 2, y: WALL_SIZE.height / 2 };
 
 function getOrCreateAirUserId() {
@@ -42,6 +41,10 @@ export function AirController() {
   const [motionStatus, setMotionStatus] = useState("off");
   const [aimPoint, setAimPoint] = useState<AimPoint>(CENTER_POINT);
   const [spraying, setSpraying] = useState(false);
+  const [motionSensitivity, setMotionSensitivity] = useState(DEFAULT_MOTION_SENSITIVITY);
+  const [motionThreshold, setMotionThreshold] = useState(DEFAULT_MOTION_THRESHOLD);
+  const [velocityDecay, setVelocityDecay] = useState(DEFAULT_VELOCITY_DECAY);
+  const [flipX, setFlipX] = useState(false);
 
   const indicatorStyle = useMemo(
     () => ({
@@ -98,13 +101,16 @@ export function AirController() {
         ay = rawY - gravityRef.current.y;
       }
 
-      const fx = Math.abs(ax) > MOTION_THRESHOLD ? ax : 0;
-      const fy = Math.abs(ay) > MOTION_THRESHOLD ? ay : 0;
+      const fx = Math.abs(ax) > motionThreshold ? ax : 0;
+      const fy = Math.abs(ay) > motionThreshold ? ay : 0;
+      const xDirection = flipX ? -1 : 1;
 
       velRef.current.x =
-        velRef.current.x * VELOCITY_DECAY +
-        fx * DISPLAY_FACING_X_MULTIPLIER * MOTION_SENSITIVITY * dt;
-      velRef.current.y = velRef.current.y * VELOCITY_DECAY + (-fy) * MOTION_SENSITIVITY * dt;
+        velRef.current.x * velocityDecay +
+        fx * xDirection * motionSensitivity * dt;
+      velRef.current.y =
+        velRef.current.y * velocityDecay +
+        (-fy) * motionSensitivity * dt;
 
       const nextX = clamp(pointRef.current.x + velRef.current.x, 0, WALL_SIZE.width);
       const nextY = clamp(pointRef.current.y + velRef.current.y, 0, WALL_SIZE.height);
@@ -122,7 +128,7 @@ export function AirController() {
       window.clearTimeout(checkTimer);
       window.removeEventListener("devicemotion", onMotion);
     };
-  }, [mode, motionEnabled]);
+  }, [flipX, mode, motionEnabled, motionSensitivity, motionThreshold, velocityDecay]);
 
   function setPointFromTouch(clientX: number, clientY: number) {
     const element = surfaceRef.current;
@@ -254,6 +260,59 @@ export function AirController() {
           />
           <span className="air-size-label">{size}px</span>
         </div>
+        {mode === "air" ? (
+          <div className="air-motion-controls">
+            <label className="air-motion-control">
+              <span>Sensitivity</span>
+              <input
+                aria-label="Motion sensitivity"
+                max={320}
+                min={40}
+                step={10}
+                type="range"
+                value={motionSensitivity}
+                onChange={(e) => setMotionSensitivity(Number(e.target.value))}
+              />
+              <output>{motionSensitivity}</output>
+            </label>
+            <label className="air-motion-control">
+              <span>Deadzone</span>
+              <input
+                aria-label="Motion deadzone"
+                max={1.2}
+                min={0}
+                step={0.05}
+                type="range"
+                value={motionThreshold}
+                onChange={(e) => setMotionThreshold(Number(e.target.value))}
+              />
+              <output>{motionThreshold.toFixed(2)}</output>
+            </label>
+            <label className="air-motion-control">
+              <span>Damping</span>
+              <input
+                aria-label="Motion damping"
+                max={0.98}
+                min={0.5}
+                step={0.01}
+                type="range"
+                value={velocityDecay}
+                onChange={(e) => setVelocityDecay(Number(e.target.value))}
+              />
+              <output>{velocityDecay.toFixed(2)}</output>
+            </label>
+            <button
+              className={`air-toggle-button ${flipX ? "is-active" : ""}`}
+              type="button"
+              onClick={() => {
+                velRef.current = { x: 0, y: 0 };
+                setFlipX((value) => !value);
+              }}
+            >
+              Flip X
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="air-stage">
