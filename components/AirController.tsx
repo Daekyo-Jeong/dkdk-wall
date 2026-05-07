@@ -79,8 +79,12 @@ export function AirController() {
   useEffect(() => {
     const orientReq = (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission;
     if (typeof orientReq !== "function") {
-      setMotionEnabled(true);
-      setMotionStatus("ready");
+      const timer = window.setTimeout(() => {
+        setMotionEnabled(true);
+        setMotionStatus("ready");
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
   }, []);
 
@@ -183,7 +187,6 @@ export function AirController() {
       window.removeEventListener("devicemotion",      onMotion);
       window.removeEventListener("deviceorientation", onOrient);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, motionEnabled]);
 
   const isSensor = mode === "fusion";
@@ -221,7 +224,7 @@ export function AirController() {
       window.removeEventListener("touchend",      stopSpray);
       window.removeEventListener("touchcancel",   stopSpray);
     };
-  }, [isSensor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSensor]);
 
   // ── 터치 위치 (touch 모드) ─────────────────────────────────────
   function setPointFromTouch(cx: number, cy: number) {
